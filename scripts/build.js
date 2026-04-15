@@ -1,4 +1,4 @@
-import { bundle } from 'https://deno.land/x/emit@0.40.0/mod.ts';
+import { bundle } from 'emit';
 
 const DEBUG = Deno.env.get('DEBUG');
 const { compilerOptions, imports } = JSON.parse(Deno.readTextFileSync('deno.json'));
@@ -32,6 +32,7 @@ async function emit(src, out) {
   return Deno.writeTextFile(out, (await bundle(src, bundleOptions)).code);
 }
 
+// TODO: refactor to Deno.bundle
 async function download(src, out, transform = (uint8array) => uint8array) {
   Deno.mkdirSync(out.split('/').slice(0, -1).join('/'), { recursive: true });
   const res = await fetch(src);
@@ -51,11 +52,8 @@ if (DEBUG) {
 
 const result = await Promise.allSettled([
   emit('app/src/main.ts', 'public/main.bundle.js'),
-
   emit('app/src/webview.ts', 'public/webview.js'),
-
   emit('client/src/script.ts', 'public/script.bundle.js'),
-
   download(
     'https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.8.1/github-markdown.min.css',
     'public/github-markdown.min.css',
@@ -67,17 +65,14 @@ const result = await Promise.allSettled([
       );
     },
   ),
-
   download(
-    'https://cdn.jsdelivr.net/npm/mermaid@11.12.0/dist/mermaid.min.js',
+    'https://cdn.jsdelivr.net/npm/mermaid@11.14.0/dist/mermaid.min.js',
     'public/mermaid.min.js',
   ),
-
   download(
-    'https://cdn.jsdelivr.net/npm/katex@0.16.24/dist/katex.min.css',
+    'https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css',
     'public/katex.min.css',
   ),
-
   ...[
     'KaTeX_AMS-Regular.woff2',
     'KaTeX_Caligraphic-Bold.woff2',
@@ -101,7 +96,7 @@ const result = await Promise.allSettled([
     'KaTeX_Typewriter-Regular.woff2',
   ].map((font) =>
     download(
-      `https://cdn.jsdelivr.net/npm/katex@0.16.24/dist/fonts/${font}`,
+      `https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/fonts/${font}`,
       `public/fonts/${font}`,
     )
   ),
