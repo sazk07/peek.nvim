@@ -1,6 +1,7 @@
 import Mermaid from 'mermaid';
 import { getInjectConfig } from './util.ts';
 
+// TODO: replace skypack cdn mermaid with type from original source
 declare const mermaid: typeof Mermaid;
 
 function init() {

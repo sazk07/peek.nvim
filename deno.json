@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "build": "deno run --allow-run --allow-net --allow-read --allow-write --allow-env --no-check scripts/build.js",
+    "build": "deno run --allow-run --allow-net --allow-read --allow-write --allow-env --no-check --unstable-bundle --allow-ffi scripts/build.js",
     "build:watch": "deno task build --watch",
     "build:fast": "FAST=true deno task --quiet build",
     "build:debug": "DEBUG=true deno task build",
@@ -16,6 +16,10 @@
     ]
   },
   "imports": {
+    "github-markdown-css": "npm:github-markdown-css@^5.9.0",
+    "lightningcss": "npm:lightningcss@^1.32.0",
+    "mermaid-min": "https://cdn.jsdelivr.net/npm/mermaid@11.14.0/dist/mermaid.min.js",
+    "katex-css": "https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css",
     "openView": "https://deno.land/x/open@v1.0.0/index.ts",
     "highlightJs": "https://cdn.skypack.dev/highlight.js@11.11.1",
     "markdown-it": "https://esm.sh/markdown-it@14.1.1",

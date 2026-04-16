@@ -1,4 +1,5 @@
 import { bundle } from 'emit';
+import { transform as minifyCss } from 'lightningcss';
 
 const DEBUG = Deno.env.get('DEBUG');
 const { compilerOptions, imports } = JSON.parse(Deno.readTextFileSync('deno.json'));
@@ -8,7 +9,6 @@ function logPublicContent() {
   console.table(
     Array.from(Deno.readDirSync('public')).reduce((table, entry) => {
       const { size, mtime } = Deno.statSync('public/' + entry.name);
-
       table[entry.name] = {
         size,
         modified: new Date(mtime).toLocaleTimeString('en-GB', {
@@ -22,24 +22,37 @@ function logPublicContent() {
           fractionalSecondDigits: 3,
         }),
       };
-
       return table;
     }, {}),
   );
 }
 
+// TODO: replace deprecated emit file
 async function emit(src, out) {
   return Deno.writeTextFile(out, (await bundle(src, bundleOptions)).code);
 }
 
-// TODO: refactor to Deno.bundle
-async function download(src, out, transform = (uint8array) => uint8array) {
+async function downloadAndMinify(
+  src,
+  out,
+  { transform = (uint8array) => uint8array, minifyDownload = false } = {},
+) {
   Deno.mkdirSync(out.split('/').slice(0, -1).join('/'), { recursive: true });
-  const res = await fetch(src);
+  const resolvedUrl = import.meta.resolve(src);
+  const res = await fetch(resolvedUrl);
   if (!res.ok) {
-    throw new Error(`Failed to fetch ${src}. ${res.status} ${res.statusText}`);
+    throw new Error(`Failed to fetch ${resolvedUrl}. ${res.status} ${res.statusText}`);
   }
-  Deno.writeFileSync(out, transform(new Uint8Array(await res.arrayBuffer())));
+  let transformed = transform(new Uint8Array(await res.arrayBuffer()));
+  if (minifyDownload) {
+    const { code } = minifyCss({
+      minify: true,
+      code: transformed,
+      filename: out,
+    });
+    transformed = code;
+  }
+  Deno.writeFileSync(out, transformed);
 }
 
 if (DEBUG) {
@@ -54,25 +67,19 @@ const result = await Promise.allSettled([
   emit('app/src/main.ts', 'public/main.bundle.js'),
   emit('app/src/webview.ts', 'public/webview.js'),
   emit('client/src/script.ts', 'public/script.bundle.js'),
-  download(
-    'https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.8.1/github-markdown.min.css',
-    'public/github-markdown.min.css',
-    (uint8array) => {
+  downloadAndMinify('github-markdown-css', 'public/github-markdown.min.css', {
+    transform: (uint8array) => {
       return new TextEncoder().encode(
-        new TextDecoder().decode(uint8array)
+        new TextDecoder()
+          .decode(uint8array)
           .replace('@media (prefers-color-scheme:dark)', '[data-theme=dark]')
           .replace('@media (prefers-color-scheme:light)', '[data-theme=light]'),
       );
     },
-  ),
-  download(
-    'https://cdn.jsdelivr.net/npm/mermaid@11.14.0/dist/mermaid.min.js',
-    'public/mermaid.min.js',
-  ),
-  download(
-    'https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css',
-    'public/katex.min.css',
-  ),
+    minifyDownload: true,
+  }),
+  downloadAndMinify('mermaid-min', 'public/mermaid.min.js'),
+  downloadAndMinify('katex-css', 'public/katex.min.css', { minifyDownload: true }),
   ...[
     'KaTeX_AMS-Regular.woff2',
     'KaTeX_Caligraphic-Bold.woff2',
@@ -95,10 +102,10 @@ const result = await Promise.allSettled([
     'KaTeX_Size4-Regular.woff2',
     'KaTeX_Typewriter-Regular.woff2',
   ].map((font) =>
-    download(
+    downloadAndMinify(
       `https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/fonts/${font}`,
       `public/fonts/${font}`,
-    )
+    ),
   ),
 ]);
 
