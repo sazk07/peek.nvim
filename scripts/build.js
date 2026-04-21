@@ -1,13 +1,10 @@
-import { bundle } from 'emit';
 import { transform as minifyCss } from 'lightningcss';
 
 const DEBUG = Deno.env.get('DEBUG');
-const { compilerOptions, imports } = JSON.parse(Deno.readTextFileSync('deno.json'));
-const bundleOptions = { compilerOptions, importMap: { imports } };
 
 function logPublicContent() {
   console.table(
-    Array.from(Deno.readDirSync('public')).reduce((table, entry) => {
+    [...Deno.readDirSync('public')].reduce((table, entry) => {
       const { size, mtime } = Deno.statSync('public/' + entry.name);
       table[entry.name] = {
         size,
@@ -27,9 +24,17 @@ function logPublicContent() {
   );
 }
 
-// TODO: replace deprecated emit file
 async function emit(src, out) {
-  return Deno.writeTextFile(out, (await bundle(src, bundleOptions)).code);
+  const res = await Deno.bundle({
+    entrypoints: [src],
+    platform: 'browser',
+    outputPath: out,
+    format: 'esm',
+    inlineImports: true,
+  });
+  if (!res.success) {
+    throw new Error(`Failed to bundle ${src}. ${res.errors.join('\n')}`);
+  }
 }
 
 async function downloadAndMinify(
@@ -43,6 +48,7 @@ async function downloadAndMinify(
   if (!res.ok) {
     throw new Error(`Failed to fetch ${resolvedUrl}. ${res.status} ${res.statusText}`);
   }
+
   let transformed = transform(new Uint8Array(await res.arrayBuffer()));
   if (minifyDownload) {
     const { code } = minifyCss({
@@ -52,6 +58,7 @@ async function downloadAndMinify(
     });
     transformed = code;
   }
+
   Deno.writeFileSync(out, transformed);
 }
 
@@ -68,14 +75,13 @@ const result = await Promise.allSettled([
   emit('app/src/webview.ts', 'public/webview.js'),
   emit('client/src/script.ts', 'public/script.bundle.js'),
   downloadAndMinify('github-markdown-css', 'public/github-markdown.min.css', {
-    transform: (uint8array) => {
-      return new TextEncoder().encode(
+    transform: (uint8array) =>
+      new TextEncoder().encode(
         new TextDecoder()
           .decode(uint8array)
           .replace('@media (prefers-color-scheme:dark)', '[data-theme=dark]')
           .replace('@media (prefers-color-scheme:light)', '[data-theme=light]'),
-      );
-    },
+      ),
     minifyDownload: true,
   }),
   downloadAndMinify('mermaid-min', 'public/mermaid.min.js'),
@@ -109,9 +115,11 @@ const result = await Promise.allSettled([
   ),
 ]);
 
-result.forEach((res) => {
-  if (res.status === 'rejected') console.error(res.reason);
-});
+for (const res of result) {
+  if (res.status === 'rejected') {
+    console.error(res.reason);
+  }
+}
 
 if (DEBUG) {
   logPublicContent();
